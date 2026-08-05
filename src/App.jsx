@@ -1,109 +1,99 @@
 import { useState } from 'react';
-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import Archive from './pages/Archive';
+import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+import pb from './pb';
 import Season from './pages/Season';
+import Archive from './pages/Archive';
 import Eurocups from './pages/Eurocups';
 import Krasnodar from './pages/Krasnodar';
-import { Lock, LogOut } from 'lucide-react';
-
-// 🔑 ПАРОЛЬ БЕРЁТСЯ ИЗ ПЕРЕМЕННОЙ ОКРУЖЕНИЯ
-const SECRET_PASSWORD = import.meta.env.VITE_APP_PASSWORD || "default"; 
+import { LogOut } from 'lucide-react';
 
 function NavLink({ to, children }) {
   const location = useLocation();
   const isActive = location.pathname === to;
   return (
-    <Link to={to} className={`px-4 py-2 rounded-lg font-bold transition-all ${
-      isActive 
-        ? 'bg-emerald-700 text-white shadow-lg shadow-emerald-900/50' 
-        : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+    <Link to={to} className={`px-4 py-2 rounded-lg font-bold transition-all whitespace-nowrap ${
+      isActive ? 'bg-emerald-700 text-white shadow-lg shadow-emerald-900/50' : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
     }`}>
       {children}
     </Link>
   );
 }
 
-function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('app_auth') === 'true';
-  });
-  const [inputPassword, setInputPassword] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(pb.authStore.isValid);
+  const [login, setLogin] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
-  const handleLoginSubmit = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (inputPassword === SECRET_PASSWORD) {
-      localStorage.setItem('app_auth', 'true');
+    setError('');
+    try {
+      // 1. Пробуем войти как обычный пользователь по логину/email
+      await pb.collection('users').authWithPassword(login, password);
       setIsAuthenticated(true);
-      setErrorMsg('');
-    } else {
-      setErrorMsg('Неверный пароль доступа!');
+    } catch {
+      try {
+        // 2. Запасной вариант для админа
+        await pb.admins.authWithPassword(login, password);
+        setIsAuthenticated(true);
+      } catch (err) {
+        console.error(err);
+        setError('Неверный Логин или Пароль');
+      }
     }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('app_auth');
+    pb.authStore.clear();
     setIsAuthenticated(false);
   };
 
-  // ЭКРАН БЛОКИРОВКИ (показывается необразованным гостям)
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4 selection:bg-emerald-500/30">
-        <form onSubmit={handleLoginSubmit} className="bg-zinc-900 p-8 rounded-2xl border border-emerald-900/50 max-w-sm w-full space-y-6 shadow-2xl">
-          <div className="text-center space-y-2">
-            <div className="inline-flex p-3 bg-emerald-950/50 border border-emerald-900/50 rounded-full text-emerald-400 mb-2">
-              <Lock size={32} />
-            </div>
-            <h2 className="text-2xl font-bold text-white">Доступ ограничен</h2>
-            <p className="text-xs text-zinc-400">Введите пароль для входа в панель статистики</p>
+        <form onSubmit={handleLogin} className="bg-zinc-900 p-8 rounded-2xl border border-emerald-900/50 space-y-6 w-full max-w-sm shadow-2xl">
+          <div className="text-center">
+            <img src="/logo.png" alt="ФК Краснодар" className="h-24 mx-auto drop-shadow-md mb-6" />
+            <h2 className="text-2xl font-black text-white">Вход в панель</h2>
+          </div>
+          
+          {error && <p className="text-red-400 text-sm text-center font-bold bg-red-950/50 p-2 rounded">{error}</p>}
+          
+          <div className="space-y-4">
+            <input type="text" placeholder="Логин или Email" required
+              className="w-full bg-black border border-zinc-700 focus:border-emerald-500 focus:outline-none p-3 rounded-lg text-white transition-colors"
+              value={login} onChange={e => setLogin(e.target.value)} />
+            
+            <input type="password" placeholder="Пароль" required
+              className="w-full bg-black border border-zinc-700 focus:border-emerald-500 focus:outline-none p-3 rounded-lg text-white transition-colors"
+              value={password} onChange={e => setPassword(e.target.value)} />
           </div>
 
-          <div>
-            <input 
-              type="password" 
-              placeholder="Пароль" 
-              required 
-              className="w-full bg-black border border-zinc-700 p-3 rounded-lg text-white text-center text-lg tracking-widest outline-none focus:ring-1 focus:ring-emerald-500"
-              value={inputPassword}
-              onChange={(e) => setInputPassword(e.target.value)}
-            />
-            {errorMsg && <p className="text-red-400 text-xs text-center mt-2 font-bold">{errorMsg}</p>}
-          </div>
-
-          <button type="submit" className="w-full bg-emerald-700 hover:bg-emerald-600 text-white font-bold py-3 rounded-lg transition-colors">
-            Войти в систему
+          <button type="submit" className="w-full bg-emerald-700 hover:bg-emerald-600 py-3 rounded-lg font-bold text-white transition-colors shadow-lg shadow-emerald-900/50">
+            Войти
           </button>
         </form>
       </div>
     );
   }
 
-  // ОСНОВНОЕ ПРИЛОЖЕНИЕ (показывается только после ввода пароля)
   return (
-    <BrowserRouter>
+    <HashRouter>
       <div className="min-h-screen bg-zinc-950 text-white font-sans selection:bg-emerald-500/30">
         <header className="bg-black border-b border-emerald-900/50 p-4 sticky top-0 z-50">
-          <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <img 
-                src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/FC_Krasnodar_logo.svg/512px-FC_Krasnodar_logo.svg.png" 
-                alt="ФК Краснодар" 
-                className="h-10 w-auto"
-              />
-              <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          <div className="max-w-6xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              <img src="/logo.png" alt="ФК Краснодар" className="h-10 w-auto drop-shadow-md hidden sm:block" />
+              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                 <NavLink to="/">Сезон</NavLink>
                 <NavLink to="/archive">Архив</NavLink>
                 <NavLink to="/euro">Еврокубки</NavLink>
                 <NavLink to="/krasnodar">Краснодар</NavLink>
               </div>
             </div>
-
-            <button 
-              onClick={handleLogout} 
-              className="text-zinc-500 hover:text-red-400 p-2 transition-colors"
-              title="Выйти из системы"
-            >
+            
+            <button onClick={handleLogout} className="text-zinc-500 hover:text-red-400 p-2 transition-colors" title="Выйти">
               <LogOut size={20} />
             </button>
           </div>
@@ -118,8 +108,6 @@ function App() {
           </Routes>
         </main>
       </div>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
-
-export default App;
