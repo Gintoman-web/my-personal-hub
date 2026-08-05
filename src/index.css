@@ -1,1 +1,35 @@
 @import "tailwindcss";
+
+/* Фиксы для темного режима под Tailwind v4 */
+html, body, #root {
+  background-color: #09090b !important; /* zinc-950 */
+  color: #ffffff !important;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+/* Черные выпадающие списки (select) */
+select, option {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+
+/* Запрещаем Chrome делать поля белыми при автозаполнении */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px #000000 inset !important;
+    -webkit-text-fill-color: #ffffff !important;
+    transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Скрытие скроллбара */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
