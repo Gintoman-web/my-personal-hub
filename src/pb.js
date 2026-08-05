@@ -1,6 +1,6 @@
 import PocketBase from 'pocketbase';
 
-// Вставь сюда IP-адрес твоего сервера вместо нулей
-const pb = new PocketBase('/');
+// Используем URL из переменных окружения
+const pb = new PocketBase(import.meta.env.VITE_POCKETBASE_URL || '/');
 
 export default pb;

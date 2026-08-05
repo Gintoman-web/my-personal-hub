@@ -1,65 +1,38 @@
 import { useState, useEffect } from 'react';
 import pb from '../pb';
 import { Plus, X, Trophy, Edit2, Trash2, Flag } from 'lucide-react';
+import { useSeason, useMatchHandler } from '../hooks/useData';
 
 export default function Season() {
-  const [teams, setTeams] = useState([]);
-  const [matches, setMatches] = useState([]);
-  const [scorers, setScorers] = useState([]);
+  const { 
+    season, 
+    teams, 
+    matches, 
+    scorers, 
+    loading, 
+    error, 
+    refreshData,
+    setSeason,
+    setTeams,
+    setMatches,
+    setScorers
+  } = useSeason();
+
   const [tab, setTab] = useState('A');
-  const [season, setSeason] = useState(null);
-  
-  const [showMatchForm, setShowMatchForm] = useState(false);
-  const [editingMatchId, setEditingMatchId] = useState(null);
-
-  const [matchForm, setMatchForm] = useState({
-    team_id: '', opponent: '', team_score: 0, opponent_score: 0, scorers_list: []
-  });
-
   const [newScorerName, setNewScorerName] = useState('');
   const [showAddScorerInput, setShowAddScorerInput] = useState(false);
 
-  // ЧИСТЫЕ ФУНКЦИИ ФЕТЧИНГА
-  const fetchSeasonData = async () => {
-    let activeSeason;
-    const seasons = await pb.collection('seasons').getFullList({ filter: 'is_active=true' });
-    
-    if (seasons.length > 0) {
-      activeSeason = seasons[0];
-    } else {
-      const currentYear = new Date().getFullYear();
-      const nextYearStr = String(currentYear + 1).slice(2);
-      activeSeason = await pb.collection('seasons').create({ title: `Сезон ${currentYear}/${nextYearStr}`, is_active: true });
-    }
-
-    const loadedTeams = await pb.collection('teams').getFullList();
-    const loadedMatches = await pb.collection('matches').getFullList({ filter: `season_id="${activeSeason.id}"` });
-    const loadedScorers = await pb.collection('scorers').getFullList();
-
-    return { activeSeason, loadedTeams, loadedMatches, loadedScorers };
-  };
-
-  const fetchMatchesAndScorers = async (seasonId) => {
-    const updatedMatches = await pb.collection('matches').getFullList({ filter: `season_id="${seasonId}"` });
-    const updatedScorers = await pb.collection('scorers').getFullList();
-    return { updatedMatches, updatedScorers };
-  };
-
-  // СТРОГИЙ useEffect
-  useEffect(() => {
-    let ignore = false;
-    fetchSeasonData()
-      .then(data => {
-        if (!ignore) {
-          setSeason(data.activeSeason);
-          setTeams(data.loadedTeams);
-          setMatches(data.loadedMatches);
-          setScorers(data.loadedScorers);
-        }
-      })
-      .catch(err => console.error("Ошибка загрузки данных:", err));
-    return () => { ignore = true; };
-  }, []);
+  const {
+    showMatchForm,
+    editingMatchId,
+    matchForm,
+    setMatchForm,
+    handleStartEditMatch,
+    handleDeleteMatch,
+    handleSaveMatch,
+    resetFormAndClose,
+    toggleMatchForm
+  } = useMatchHandler(season, refreshData);
 
   // КНОПКА: ЗАВЕРШИТЬ СЕЗОН (ТРАНСФЕР ДАННЫХ В АРХИВ)
   const handleEndSeason = async () => {
@@ -175,41 +148,6 @@ export default function Season() {
     });
   };
 
-  const handleStartEditMatch = (match) => {
-    setEditingMatchId(match.id);
-    setMatchForm({
-      team_id: match.team_id, opponent: match.opponent,
-      team_score: match.team_score, opponent_score: match.opponent_score,
-      scorers_list: match.scorers_list || []
-    });
-    setShowMatchForm(true);
-  };
-
-  const handleDeleteMatch = async (matchId) => {
-    if (!season || !window.confirm("Удалить матч?")) return;
-    await pb.collection('matches').delete(matchId);
-    fetchMatchesAndScorers(season.id).then(data => {
-      setMatches(data.updatedMatches); setScorers(data.updatedScorers);
-    }).catch(console.error);
-  };
-
-  const handleSaveMatch = async (e) => {
-    e.preventDefault();
-    if (!season || !matchForm.team_id) return;
-    if (editingMatchId) await pb.collection('matches').update(editingMatchId, matchForm);
-    else await pb.collection('matches').create({ ...matchForm, season_id: season.id });
-
-    resetFormAndClose();
-    fetchMatchesAndScorers(season.id).then(data => {
-      setMatches(data.updatedMatches); setScorers(data.updatedScorers);
-    }).catch(console.error);
-  };
-
-  const resetFormAndClose = () => {
-    setShowMatchForm(false); setEditingMatchId(null);
-    setMatchForm({ team_id: '', opponent: '', team_score: 0, opponent_score: 0, scorers_list: [] });
-  };
-
   // ВЫЧИСЛЕНИЯ ТАБЛИЦЫ
   const getTableData = (group) => {
     return teams.filter(t => t.group === group).map(team => {
@@ -277,7 +215,7 @@ export default function Season() {
         
         <div className="flex items-center gap-3">
           <span className="text-emerald-500 font-bold hidden md:inline mr-2">
-            {season ? season.title : 'Загрузка...'}
+            {season ? season.title : (loading ? 'Загрузка...' : 'Нет сезона')}
           </span>
           
           <button onClick={handleEndSeason}
@@ -287,7 +225,7 @@ export default function Season() {
             <span className="hidden lg:inline">Завершить сезон</span>
           </button>
 
-          <button onClick={() => { if (showMatchForm) resetFormAndClose(); else setShowMatchForm(true); }}
+          <button onClick={toggleMatchForm}
             className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold transition-colors">
             {showMatchForm ? <X size={20} /> : <Plus size={20} />}
             <span className="hidden sm:inline">{showMatchForm ? 'Отмена' : 'Внести матч'}</span>
@@ -295,8 +233,22 @@ export default function Season() {
         </div>
       </div>
 
+      {/* Индикатор загрузки */}
+      {loading && (
+        <div className="text-center py-12 text-zinc-400">
+          Загрузка данных...
+        </div>
+      )}
+
+      {/* Ошибка */}
+      {error && (
+        <div className="bg-red-950/50 border border-red-900 p-4 rounded-xl text-red-400 text-center">
+          Ошибка загрузки данных: {error.message}. Проверьте подключение к PocketBase.
+        </div>
+      )}
+
       {/* Форма внесения матча */}
-      {showMatchForm && (
+      {!loading && !error && showMatchForm && (
         <form onSubmit={handleSaveMatch} className="bg-zinc-900 p-6 rounded-xl border border-emerald-900/50 space-y-6">
           <h3 className="text-xl font-bold text-white">
             {editingMatchId ? 'Редактировать результат матча' : 'Внести результат матча'}
