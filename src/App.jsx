@@ -6,8 +6,8 @@ import Eurocups from './pages/Eurocups';
 import Krasnodar from './pages/Krasnodar';
 import { Lock, LogOut } from 'lucide-react';
 
-// 🔑 ЗАДАЙ СВОЙ ПАРОЛЬ ДЛЯ ВХОДА ЗДЕСЬ:
-const SECRET_PASSWORD = "yD4S8hPx"; 
+// 🔑 ПАРОЛЬ БЕРЁТСЯ ИЗ ПЕРЕМЕННОЙ ОКРУЖЕНИЯ
+const SECRET_PASSWORD = import.meta.env.VITE_APP_PASSWORD || "default"; 
 
 function NavLink({ to, children }) {
   const location = useLocation();
